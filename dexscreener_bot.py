@@ -24,7 +24,7 @@ class DexScreenerBot:
           - filters (e.g. rug_threshold, pump_threshold, tier1_liquidity)
           - coin_blacklist and dev_blacklist (lists of symbols/developer addresses)
           - telegram (telegram_token and telegram_chat_id for notifications)
-          - api_endpoints for Pocket Universe and rugcheck.xyz
+          - api_endpoints for rugcheck.xyz (Pocket Universe verification has been removed)
         """
         if not os.path.exists(self.config_path):
             print(f"[{datetime.now()}] Config file {self.config_path} not found. Using default settings.")
@@ -41,8 +41,7 @@ class DexScreenerBot:
                     "telegram_chat_id": ""
                 },
                 "api_endpoints": {
-                    "pocket_universe": "https://api.pocketuniverse.io/verify",  # Leave blank ("") if not used.
-                    "rugcheck": "https://api.rugcheck.xyz/check"
+                    "rugcheck": "https://api.rugcheck.xyz/v1"
                 }
             }
             return default_config
@@ -142,27 +141,11 @@ class DexScreenerBot:
 
     def verify_volume(self, token):
         """
-        Verify the authenticity of the token’s volume.
-        If the Pocket Universe API is configured and the token has an address,
-        attempt an API call; otherwise, fall back to checking that volume > 0.
+        Verify the token's volume by ensuring it is greater than zero.
+        Pocket Universe verification has been removed.
         """
-        token_address = token.get("address")
-        endpoint = self.config.get("api_endpoints", {}).get("pocket_universe", "")
-        # If no endpoint is provided or token_address is missing, use a basic check.
-        if not endpoint or not token_address:
-            volume = self._safe_float(token.get("volumeUsd") or token.get("volume"))
-            return volume is not None and volume > 0
-        try:
-            response = requests.get(f"{endpoint}?token={token_address}", timeout=10)
-            response.raise_for_status()
-            result = response.json()
-            authentic = result.get("authentic", False)
-            if not authentic:
-                print(f"[{datetime.now()}] Token {token.get('symbol')} failed volume authenticity check.")
-            return authentic
-        except Exception as e:
-            print(f"[{datetime.now()}] Error verifying volume for token {token.get('symbol')}: {e}")
-            return False
+        volume = self._safe_float(token.get("volumeUsd") or token.get("volume"))
+        return volume is not None and volume > 0
 
     def verify_rugcheck(self, token):
         """
@@ -256,7 +239,7 @@ class DexScreenerBot:
           - Expecting data to be a list of token profiles.
           - Filter tokens based on blacklists.
           - Skip tokens with bundled supply.
-          - Verify volume authenticity and rugcheck status.
+          - Verify volume and rugcheck status.
           - Save data, classify events, and send trade notifications via Telegram.
         """
         # If data is a list, use it directly; otherwise, try to extract tokens.
@@ -317,4 +300,5 @@ class DexScreenerBot:
 if __name__ == "__main__":
     bot = DexScreenerBot()
     bot.run(interval=60)
+
     
