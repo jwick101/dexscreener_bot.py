@@ -86,7 +86,7 @@ class DexScreenerBot:
     
     def fetch_data(self):
         """
-        Fetch token data from Dexscreener using the new API endpoint.
+        Fetch token profile data from DexScreener using the new API endpoint.
         """
         url = "https://api.dexscreener.com/token-profiles/latest/v1"
         try:
@@ -101,20 +101,22 @@ class DexScreenerBot:
     def save_token_data(self, token):
         """
         Save the token’s snapshot into the database.
+        Note: Since the new API does not provide market data, fields like price, liquidity,
+        volume, and price_change will likely be stored as None.
         """
         c = self.conn.cursor()
         c.execute('''
             INSERT INTO token_data (token_address, symbol, developer, contract, price, liquidity, volume, price_change, bundled)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            token.get("address"),
-            token.get("symbol"),
+            token.get("tokenAddress"),
+            token.get("symbol") or token.get("tokenAddress") or "UNKNOWN",
             token.get("developer"),
             token.get("contract"),
-            self._safe_float(token.get("priceUsd") or token.get("price")),
-            self._safe_float(token.get("liquidityUsd") or token.get("liquidity")),
-            self._safe_float(token.get("volumeUsd") or token.get("volume")),
-            self._safe_float(token.get("priceChange") or token.get("price_change")),
+            self._safe_float(token.get("priceUsd")),        # Likely None
+            self._safe_float(token.get("liquidityUsd")),      # Likely None
+            self._safe_float(token.get("volumeUsd")),         # Likely None
+            self._safe_float(token.get("priceChange")),       # Likely None
             1 if token.get("bundled", False) else 0
         ))
         self.conn.commit()
@@ -141,11 +143,10 @@ class DexScreenerBot:
 
     def verify_volume(self, token):
         """
-        Verify the token's volume by ensuring it is greater than zero.
-        Pocket Universe verification has been removed.
+        Verify the token's volume.
+        Since the new API does not provide volume data, we simply return True.
         """
-        volume = self._safe_float(token.get("volumeUsd") or token.get("volume"))
-        return volume is not None and volume > 0
+        return True
 
     def verify_rugcheck(self, token):
         """
@@ -154,7 +155,7 @@ class DexScreenerBot:
         """
         contract = token.get("contract")
         if not contract:
-            print(f"[{datetime.now()}] No contract info for token {token.get('symbol')}, skipping rugcheck.")
+            print(f"[{datetime.now()}] No contract info for token {token.get('symbol') or token.get('tokenAddress')}, skipping rugcheck.")
             return False
         endpoint = self.config.get("api_endpoints", {}).get("rugcheck", "")
         if not endpoint:
@@ -165,10 +166,10 @@ class DexScreenerBot:
             result = response.json()
             status = result.get("status", "")
             if status != "Good":
-                print(f"[{datetime.now()}] Token {token.get('symbol')} is marked as '{status}' on rugcheck.xyz.")
+                print(f"[{datetime.now()}] Token {token.get('symbol') or token.get('tokenAddress')} is marked as '{status}' on rugcheck.xyz.")
             return status == "Good"
         except Exception as e:
-            print(f"[{datetime.now()}] Error verifying rugcheck for token {token.get('symbol')}: {e}")
+            print(f"[{datetime.now()}] Error verifying rugcheck for token {token.get('symbol') or token.get('tokenAddress')}: {e}")
             return False
 
     def send_telegram_notification(self, message):
@@ -197,12 +198,13 @@ class DexScreenerBot:
 
     def classify_coin(self, token):
         """
-        Apply classification thresholds from the config to the token’s metrics.
-        Returns a list of detected events.
+        Apply classification thresholds from the config to the token’s market metrics.
+        Since the new API does not provide market data, this method will likely return an empty list.
         """
         events = []
-        token_address = token.get("address")
-        symbol = token.get("symbol")
+        # Use tokenAddress as both the unique identifier and fallback for symbol.
+        token_address = token.get("tokenAddress")
+        symbol = token.get("symbol") or token_address or "UNKNOWN"
         price_change = token.get("priceChange") or token.get("price_change")
         liquidity = token.get("liquidityUsd") or token.get("liquidity")
         
@@ -214,12 +216,11 @@ class DexScreenerBot:
         price_change_val = self._safe_float(price_change)
         liquidity_val = self._safe_float(liquidity)
         
+        # If market data is not available, these values will be None and no events will be detected.
         if price_change_val is not None and price_change_val < rug_threshold:
             events.append(("rugged", f"Price dropped by {price_change_val}% (threshold: {rug_threshold}%)"))
-        
         if price_change_val is not None and price_change_val > pump_threshold:
             events.append(("pumped", f"Price increased by {price_change_val}% (threshold: {pump_threshold}%)"))
-        
         if liquidity_val is not None and liquidity_val > tier1_liquidity:
             events.append(("tier-1", f"High liquidity of {liquidity_val} (threshold: {tier1_liquidity})"))
         
@@ -239,7 +240,7 @@ class DexScreenerBot:
           - Expecting data to be a list of token profiles.
           - Filter tokens based on blacklists.
           - Skip tokens with bundled supply.
-          - Verify volume and rugcheck status.
+          - Verify volume (always returns True) and rugcheck status.
           - Save data, classify events, and send trade notifications via Telegram.
         """
         # If data is a list, use it directly; otherwise, try to extract tokens.
@@ -253,7 +254,8 @@ class DexScreenerBot:
         dev_blacklist = set(addr.lower() for addr in self.config.get("dev_blacklist", []))
         
         for token in tokens:
-            symbol = token.get("symbol", "").upper()
+            # Use tokenAddress as the unique identifier and fallback for symbol.
+            symbol = (token.get("symbol") or token.get("tokenAddress") or "").upper()
             developer = token.get("developer", "")
             bundled = token.get("bundled", False)
             
@@ -270,7 +272,7 @@ class DexScreenerBot:
                 continue
             
             if not self.verify_volume(token):
-                print(f"[{datetime.now()}] Token {symbol} failed volume authenticity check. Skipping.")
+                print(f"[{datetime.now()}] Token {symbol} failed volume check. Skipping.")
                 continue
             
             if not self.verify_rugcheck(token):
@@ -300,5 +302,4 @@ class DexScreenerBot:
 if __name__ == "__main__":
     bot = DexScreenerBot()
     bot.run(interval=60)
-
     
