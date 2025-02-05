@@ -89,7 +89,7 @@ class DexScreenerBot:
         """
         Fetch token data from Dexscreener. Adjust the URL/parameters per the current API.
         """
-        url = "https://api.dexscreener.com/latest/dex/tokens"
+        url = "https://api.dexscreener.com/token-profiles/latest/v1"
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()  # Raise for HTTP errors
@@ -329,4 +329,3 @@ class DexScreenerBot:
 if __name__ == "__main__":
     bot = DexScreenerBot()
     bot.run(interval=60)
-    
