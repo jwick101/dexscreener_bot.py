@@ -1,0 +1,23 @@
+{
+    "filters": {
+      "rug_threshold": -80,
+      "pump_threshold": 100,
+      "tier1_liquidity": 1000000
+    },
+    "coin_blacklist": [
+      "SCAMCOIN",
+      "FAKECOIN"
+    ],
+    "dev_blacklist": [
+      "0xbad1dea...",
+      "0xscamdev..."
+    ],
+    "telegram": {
+      "telegram_token": "7849320992:AAELJ8nTnbrCeo77QMiKXS1Ll8wmjh9b924",
+      "telegram_chat_id": "zs"
+    },
+    "api_endpoints": {
+      "pocket_universe": "https://api.pocketuniverse.io/verify",
+      "rugcheck": "https://api.rugcheck.xyz/check"
+    }
+  }
