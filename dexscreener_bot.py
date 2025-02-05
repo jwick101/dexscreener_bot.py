@@ -87,7 +87,7 @@ class DexScreenerBot:
     
     def fetch_data(self):
         """
-        Fetch token data from Dexscreener. Adjust the URL/parameters per the current API.
+        Fetch token data from DexScreener using the new API endpoint.
         """
         url = "https://api.dexscreener.com/token-profiles/latest/v1"
         try:
@@ -101,9 +101,7 @@ class DexScreenerBot:
 
     def save_token_data(self, token):
         """
-        Save the token’s snapshot into the database. We include fields such as:
-          - token_id, symbol, developer, contract
-          - price, liquidity, volume, price_change, bundled (1 if True, 0 if False)
+        Save the token’s snapshot into the database.
         """
         c = self.conn.cursor()
         c.execute('''
@@ -145,21 +143,17 @@ class DexScreenerBot:
     def verify_volume(self, token):
         """
         Verify the authenticity of the token’s volume.
-        Uses the Pocket Universe API if an endpoint is provided;
-        otherwise, falls back to a simple check.
+        Uses the Pocket Universe API if available; otherwise, falls back to a simple check.
         """
         token_id = token.get("id")
         endpoint = self.config.get("api_endpoints", {}).get("pocket_universe", "")
         if not endpoint:
-            # Fallback: ensure volume is a positive number.
             volume = self._safe_float(token.get("volume"))
             return volume is not None and volume > 0
         try:
-            # Example: API call with token as a query parameter.
             response = requests.get(f"{endpoint}?token={token_id}", timeout=10)
             response.raise_for_status()
             result = response.json()
-            # Expecting a field "authentic" (True if volume is genuine)
             authentic = result.get("authentic", False)
             if not authentic:
                 print(f"[{datetime.now()}] Token {token.get('symbol')} failed volume authenticity check.")
@@ -179,7 +173,6 @@ class DexScreenerBot:
             return False
         endpoint = self.config.get("api_endpoints", {}).get("rugcheck", "")
         if not endpoint:
-            # If no endpoint is provided, assume token is good.
             return True
         try:
             response = requests.get(f"{endpoint}?contract={contract}", timeout=10)
@@ -196,7 +189,6 @@ class DexScreenerBot:
     def send_telegram_notification(self, message):
         """
         Send a notification via Telegram.
-        The configuration must include a valid telegram_token and telegram_chat_id.
         """
         telegram_config = self.config.get("telegram", {})
         telegram_token = telegram_config.get("telegram_token", "")
@@ -221,8 +213,7 @@ class DexScreenerBot:
     def classify_coin(self, token):
         """
         Apply classification thresholds from the config to the token’s metrics.
-        Detected events (e.g. 'rugged', 'pumped', 'tier-1', 'listed_on_cex') are recorded.
-        Returns the list of events.
+        Returns a list of detected events.
         """
         events = []
         token_id = token.get("id")
@@ -261,12 +252,17 @@ class DexScreenerBot:
     def analyze_tokens(self, data):
         """
         Process tokens from the DexScreener API:
-          - Filter tokens based on coin and developer blacklists.
+          - Handle the response as a list (the new API returns a list of token profiles).
+          - Filter tokens based on blacklists.
           - Skip tokens with bundled supply.
           - Verify volume authenticity and rugcheck status.
           - Save data, classify events, and send trade notifications via Telegram.
         """
-        tokens = data.get("tokens", [])
+        # If data is a list, use it directly; otherwise, try to extract tokens.
+        if isinstance(data, list):
+            tokens = data
+        else:
+            tokens = data.get("tokens", [])
         print(f"[{datetime.now()}] Processing {len(tokens)} tokens...")
         
         coin_blacklist = set(symbol.upper() for symbol in self.config.get("coin_blacklist", []))
@@ -329,3 +325,4 @@ class DexScreenerBot:
 if __name__ == "__main__":
     bot = DexScreenerBot()
     bot.run(interval=60)
+    
