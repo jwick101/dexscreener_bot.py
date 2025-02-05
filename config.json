@@ -14,7 +14,7 @@
     ],
     "telegram": {
       "telegram_token": "7849320992:AAELJ8nTnbrCeo77QMiKXS1Ll8wmjh9b924",
-      "telegram_chat_id": "zs"
+      "telegram_chat_id": "-1002478194230"
     },
     "api_endpoints": {
       "pocket_universe": "https://api.pocketuniverse.io/verify",
